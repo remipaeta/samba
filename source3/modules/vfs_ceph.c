@@ -792,9 +792,9 @@ static int cephwrap_lstat(struct vfs_handle_struct *handle,
 	return result;
 }
 
-static int cephwrap_ntimes(struct vfs_handle_struct *handle,
-			 const struct smb_filename *smb_fname,
-			 struct smb_file_time *ft)
+static int cephwrap_fntimes(struct vfs_handle_struct *handle,
+			    files_struct *fsp,
+			    struct smb_file_time *ft)
 {
 	struct ceph_statx stx = { 0 };
 	int result;
@@ -817,10 +817,29 @@ static int cephwrap_ntimes(struct vfs_handle_struct *handle,
 		return 0;
 	}
 
-	result = ceph_setattrx(handle->data, smb_fname->base_name, &stx, mask, 0);
-	DBG_DEBUG("[CEPH] ntimes(%p, %s, {%ld, %ld, %ld, %ld}) = %d\n", handle, smb_fname_str_dbg(smb_fname),
-				ft->mtime.tv_sec, ft->atime.tv_sec, ft->ctime.tv_sec,
-				ft->create_time.tv_sec, result);
+	if (!fsp->fsp_flags.is_pathref) {
+		/*
+		 * We can use an io_fd to set xattrs.
+		 */
+		result = ceph_fsetattrx(handle->data,
+					fsp_get_io_fd(fsp),
+					&stx,
+					mask);
+	} else {
+		/*
+		 * This is no longer a handle based call.
+		 */
+		result = ceph_setattrx(handle->data,
+				       fsp->fsp_name->base_name,
+				       &stx,
+				       mask,
+				       0);
+	}
+
+	DBG_DEBUG("[CEPH] ntimes(%p, %s, {%ld, %ld, %ld, %ld}) = %d\n",
+		  handle, fsp_str_dbg(fsp), ft->mtime.tv_sec, ft->atime.tv_sec,
+		  ft->ctime.tv_sec, ft->create_time.tv_sec, result);
+
 	return result;
 }
 
@@ -1581,7 +1600,7 @@ static struct vfs_fn_pointers ceph_fns = {
 	.lchown_fn = cephwrap_lchown,
 	.chdir_fn = cephwrap_chdir,
 	.getwd_fn = cephwrap_getwd,
-	.ntimes_fn = cephwrap_ntimes,
+	.fntimes_fn = cephwrap_fntimes,
 	.ftruncate_fn = cephwrap_ftruncate,
 	.fallocate_fn = cephwrap_fallocate,
 	.lock_fn = cephwrap_lock,

@@ -21,7 +21,7 @@
 
 #include "includes.h"
 #include "system/filesys.h"
-#include "popt_common.h"
+#include "lib/cmdline/cmdline.h"
 #include "nmbd/nmbd.h"
 #include "serverid.h"
 #include "messages.h"
@@ -784,8 +784,7 @@ static bool open_sockets(bool isdaemon, int port)
 		OPT_DAEMON = 1000,
 		OPT_INTERACTIVE,
 		OPT_FORK,
-		OPT_NO_PROCESS_GROUP,
-		OPT_LOG_STDOUT
+		OPT_NO_PROCESS_GROUP
 	};
 	struct poptOption long_options[] = {
 		POPT_AUTOHELP
@@ -823,14 +822,6 @@ static bool open_sockets(bool isdaemon, int port)
 			.descrip    = "Don't create a new process group",
 		},
 		{
-			.longName   = "log-stdout",
-			.shortName  = 'S',
-			.argInfo    = POPT_ARG_NONE,
-			.arg        = NULL,
-			.val        = OPT_LOG_STDOUT,
-			.descrip    = "Log to stdout",
-		},
-		{
 			.longName   = "hosts",
 			.shortName  = 'H',
 			.argInfo    = POPT_ARG_STRING,
@@ -847,6 +838,7 @@ static bool open_sockets(bool isdaemon, int port)
 			.descrip    = "Listen on the specified port",
 		},
 		POPT_COMMON_SAMBA
+		POPT_COMMON_VERSION
 		POPT_TABLEEND
 	};
 	const struct loadparm_substitution *lp_sub =
@@ -867,13 +859,30 @@ static bool open_sockets(bool isdaemon, int port)
 	 */
 	umask(0);
 
-	setup_logging(argv[0], DEBUG_DEFAULT_STDOUT);
-
 	smb_init_locale();
+
+	ok = samba_cmdline_init(frame,
+				SAMBA_CMDLINE_CONFIG_SERVER,
+				true /* require_smbconf */);
+	if (!ok) {
+		DBG_ERR("Failed to init cmdline parser!\n");
+		TALLOC_FREE(frame);
+		exit(ENOMEM);
+	}
 
 	global_nmb_port = NMB_PORT;
 
-	pc = poptGetContext("nmbd", argc, argv, long_options, 0);
+	pc = samba_popt_get_context(getprogname(),
+				    argc,
+				    argv,
+				    long_options,
+				    0);
+	if (pc == NULL) {
+		DBG_ERR("Failed to setup popt context!\n");
+		TALLOC_FREE(frame);
+		exit(1);
+	}
+
 	while ((opt = poptGetNextOpt(pc)) != -1) {
 		switch (opt) {
 		case OPT_DAEMON:
@@ -887,9 +896,6 @@ static bool open_sockets(bool isdaemon, int port)
 			break;
 		case OPT_NO_PROCESS_GROUP:
 			no_process_group = true;
-			break;
-		case OPT_LOG_STDOUT:
-			log_stdout = true;
 			break;
 		default:
 			d_fprintf(stderr, "\nInvalid option %s: %s\n\n",
@@ -915,7 +921,6 @@ static bool open_sockets(bool isdaemon, int port)
 		SAFE_FREE(lfile);
 	}
 
-	fault_setup();
 	dump_core_setup("nmbd", lp_logfile(talloc_tos(), lp_sub));
 
 	/* POSIX demands that signals are inherited. If the invoking process has
@@ -937,6 +942,7 @@ static bool open_sockets(bool isdaemon, int port)
 	/* Ignore children - no zombies. */
 	CatchChild();
 
+	log_stdout = (debug_get_log_type() == DEBUG_STDOUT);
 	if ( opt_interactive ) {
 		Fork = False;
 		log_stdout = True;
@@ -947,9 +953,7 @@ static bool open_sockets(bool isdaemon, int port)
 		exit(1);
 	}
 
-	if (log_stdout) {
-		setup_logging(argv[0], DEBUG_STDOUT);
-	} else {
+	if (!log_stdout) {
 		setup_logging( argv[0], DEBUG_FILE);
 	}
 
@@ -957,11 +961,6 @@ static bool open_sockets(bool isdaemon, int port)
 
 	DEBUG(0,("nmbd version %s started.\n", samba_version_string()));
 	DEBUGADD(0,("%s\n", COPYRIGHT_STARTUP_MESSAGE));
-
-	if (!lp_load_initial_only(get_dyn_CONFIGFILE())) {
-		DEBUG(0, ("error opening config file '%s'\n", get_dyn_CONFIGFILE()));
-		exit(1);
-	}
 
 	reopen_logs();
 
@@ -981,6 +980,7 @@ static bool open_sockets(bool isdaemon, int port)
 
 	msg = messaging_init(NULL, global_event_context());
 	if (msg == NULL) {
+		DBG_ERR("Failed to init messaging context!\n");
 		return 1;
 	}
 

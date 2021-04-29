@@ -6622,7 +6622,7 @@ NTSTATUS smb_set_file_time(connection_struct *conn,
 
 	DEBUG(10,("smb_set_file_time: setting utimes to modified values.\n"));
 
-	ret = file_ntimes(conn, set_fsp->fsp_name, ft);
+	ret = file_ntimes(conn, set_fsp, ft);
 	if (ret != 0) {
 		return map_nt_error_from_unix(errno);
 	}
@@ -8323,6 +8323,12 @@ static NTSTATUS smb_set_file_unix_basic(connection_struct *conn,
 
 	if (raw_unixmode != SMB_MODE_NO_CHANGE) {
 		int ret;
+
+		if (fsp == NULL || S_ISLNK(smb_fname->st.st_ex_mode)) {
+			DBG_WARNING("Can't set mode on symlink %s\n",
+				smb_fname_str_dbg(smb_fname));
+			return NT_STATUS_OBJECT_NAME_NOT_FOUND;
+		}
 
 		DEBUG(10,("smb_set_file_unix_basic: SMB_SET_FILE_UNIX_BASIC "
 			  "setting mode 0%o for file %s\n",

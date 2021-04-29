@@ -499,13 +499,16 @@ struct cli_credentials *net_context_creds(struct net_context *c,
 
 	if (c->opt_kerberos && c->opt_user_specified) {
 		cli_credentials_set_kerberos_state(creds,
-						   CRED_USE_KERBEROS_DESIRED);
+						   CRED_USE_KERBEROS_DESIRED,
+						   CRED_SPECIFIED);
 	} else if (c->opt_kerberos) {
 		cli_credentials_set_kerberos_state(creds,
-						   CRED_USE_KERBEROS_REQUIRED);
+						   CRED_USE_KERBEROS_REQUIRED,
+						   CRED_SPECIFIED);
 	} else {
 		cli_credentials_set_kerberos_state(creds,
-						   CRED_USE_KERBEROS_DISABLED);
+						   CRED_USE_KERBEROS_DISABLED,
+						   CRED_SPECIFIED);
 	}
 
 	if (c->opt_ccache) {
@@ -513,7 +516,9 @@ struct cli_credentials *net_context_creds(struct net_context *c,
 
 		features = cli_credentials_get_gensec_features(creds);
 		features |= GENSEC_FEATURE_NTLM_CCACHE;
-		cli_credentials_set_gensec_features(creds, features);
+		cli_credentials_set_gensec_features(creds,
+						    features,
+						    CRED_SPECIFIED);
 
 		if (c->opt_password != NULL && strlen(c->opt_password) == 0) {
 			/*

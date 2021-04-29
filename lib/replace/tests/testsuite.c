@@ -164,11 +164,16 @@ static int test_memmove(void)
 static int test_strdup(void)
 {
 	char *x;
+	int cmp;
+
 	printf("test: strdup\n");
 	x = strdup("bla");
-	if (strcmp("bla", x) != 0) {
+
+	cmp = strcmp("bla", x);
+	if (cmp != 0) {
 		printf("failure: strdup [\nfailed: expected \"bla\", got \"%s\"\n]\n",
 			   x);
+		free(x);
 		return false;
 	}
 	free(x);
@@ -259,26 +264,33 @@ static int test_setenv(void)
 static int test_strndup(void)
 {
 	char *x;
+	int cmp;
+
 	printf("test: strndup\n");
 	x = strndup("bla", 0);
-	if (strcmp(x, "") != 0) {
+	cmp = strcmp(x, "");
+	free(x);
+	if (cmp != 0) {
 		printf("failure: strndup [\ninvalid\n]\n");
 		return false;
 	}
-	free(x);
+
 	x = strndup("bla", 2);
-	if (strcmp(x, "bl") != 0) {
+	cmp = strcmp(x, "bl");
+	free(x);
+	if (cmp != 0) {
 		printf("failure: strndup [\ninvalid\n]\n");
 		return false;
 	}
-	free(x);
+
 	x = strndup("bla", 10);
-	if (strcmp(x, "bla") != 0) {
+	cmp = strcmp(x, "bla");
+	free(x);
+	if (cmp != 0) {
 		printf("failure: strndup [\ninvalid\n]\n");
-		free(x);
 		return false;
 	}
-	free(x);
+
 	printf("success: strndup\n");
 	return true;
 }
@@ -325,24 +337,30 @@ static int test_setegid(void)
 
 static int test_asprintf(void)
 {
-	char *x;
+	char *x = NULL;
+
 	printf("test: asprintf\n");
 	if (asprintf(&x, "%d", 9) != 1) {
 		printf("failure: asprintf [\ngenerate asprintf\n]\n");
+		free(x);
 		return false;
 	}
 	if (strcmp(x, "9") != 0) {
 		printf("failure: asprintf [\ngenerate asprintf\n]\n");
+		free(x);
 		return false;
 	}
 	if (asprintf(&x, "dat%s", "a") != 4) {
 		printf("failure: asprintf [\ngenerate asprintf\n]\n");
+		free(x);
 		return false;
 	}
 	if (strcmp(x, "data") != 0) {
 		printf("failure: asprintf [\ngenerate asprintf\n]\n");
+		free(x);
 		return false;
 	}
+	free(x);
 	printf("success: asprintf\n");
 	return true;
 }
@@ -1070,6 +1088,7 @@ static bool test_closefrom(void)
 		fd = dup(0);
 		if (fd == -1) {
 			perror("dup failed");
+			closefrom(3);
 			return false;
 		}
 
@@ -1077,6 +1096,7 @@ static bool test_closefrom(void)
 
 		if (fd >= 1000) {
 			printf("fd=%d\n", fd);
+			closefrom(3);
 			return false;
 		}
 	}

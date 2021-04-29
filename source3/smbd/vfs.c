@@ -238,7 +238,7 @@ void *vfs_add_fsp_extension_notype(vfs_handle_struct *handle,
 		return ext_data;
 	}
 
-	ext = (struct vfs_fsp_data *)TALLOC_ZERO(
+	ext = talloc_zero_size(
 		handle->conn, sizeof(struct vfs_fsp_data) + ext_size);
 	if (ext == NULL) {
 		return NULL;
@@ -2245,12 +2245,12 @@ struct smb_filename *smb_vfs_call_getwd(struct vfs_handle_struct *handle,
 	return handle->fns->getwd_fn(handle, ctx);
 }
 
-int smb_vfs_call_ntimes(struct vfs_handle_struct *handle,
-			const struct smb_filename *smb_fname,
-			struct smb_file_time *ft)
+int smb_vfs_call_fntimes(struct vfs_handle_struct *handle,
+			 struct files_struct *fsp,
+			 struct smb_file_time *ft)
 {
-	VFS_FIND(ntimes);
-	return handle->fns->ntimes_fn(handle, smb_fname, ft);
+	VFS_FIND(fntimes);
+	return handle->fns->fntimes_fn(handle, fsp, ft);
 }
 
 int smb_vfs_call_ftruncate(struct vfs_handle_struct *handle,

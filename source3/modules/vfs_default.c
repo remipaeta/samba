@@ -2516,88 +2516,87 @@ static struct smb_filename *vfswrap_getwd(vfs_handle_struct *handle,
  system will support.
 **********************************************************************/
 
-static int vfswrap_ntimes(vfs_handle_struct *handle,
-			  const struct smb_filename *smb_fname,
-			  struct smb_file_time *ft)
+static int vfswrap_fntimes(vfs_handle_struct *handle,
+			   files_struct *fsp,
+			   struct smb_file_time *ft)
 {
 	int result = -1;
+	struct timespec ts[2];
+	struct timespec *times = NULL;
 
-	START_PROFILE(syscall_ntimes);
+	START_PROFILE(syscall_fntimes);
 
-	if (is_named_stream(smb_fname)) {
+	if (is_named_stream(fsp->fsp_name)) {
 		errno = ENOENT;
 		goto out;
 	}
 
 	if (ft != NULL) {
 		if (is_omit_timespec(&ft->atime)) {
-			ft->atime= smb_fname->st.st_ex_atime;
+			ft->atime = fsp->fsp_name->st.st_ex_atime;
 		}
 
 		if (is_omit_timespec(&ft->mtime)) {
-			ft->mtime = smb_fname->st.st_ex_mtime;
+			ft->mtime = fsp->fsp_name->st.st_ex_mtime;
 		}
 
 		if (!is_omit_timespec(&ft->create_time)) {
 			set_create_timespec_ea(handle->conn,
-					       smb_fname,
+					       fsp->fsp_name,
 					       ft->create_time);
 		}
 
 		if ((timespec_compare(&ft->atime,
-				      &smb_fname->st.st_ex_atime) == 0) &&
+				      &fsp->fsp_name->st.st_ex_atime) == 0) &&
 		    (timespec_compare(&ft->mtime,
-				      &smb_fname->st.st_ex_mtime) == 0)) {
-			return 0;
+				      &fsp->fsp_name->st.st_ex_mtime) == 0)) {
+			result = 0;
+			goto out;
 		}
-	}
 
-#if defined(HAVE_UTIMENSAT)
-	if (ft != NULL) {
-		struct timespec ts[2];
 		ts[0] = ft->atime;
 		ts[1] = ft->mtime;
-		result = utimensat(AT_FDCWD, smb_fname->base_name, ts, 0);
+		times = ts;
 	} else {
-		result = utimensat(AT_FDCWD, smb_fname->base_name, NULL, 0);
+		times = NULL;
 	}
-	if (!((result == -1) && (errno == ENOSYS))) {
-		goto out;
-	}
-#endif
-#if defined(HAVE_UTIMES)
-	if (ft != NULL) {
-		struct timeval tv[2];
-		tv[0] = convert_timespec_to_timeval(ft->atime);
-		tv[1] = convert_timespec_to_timeval(ft->mtime);
-		result = utimes(smb_fname->base_name, tv);
-	} else {
-		result = utimes(smb_fname->base_name, NULL);
-	}
-	if (!((result == -1) && (errno == ENOSYS))) {
-		goto out;
-	}
-#endif
-#if defined(HAVE_UTIME)
-	if (ft != NULL) {
-		struct utimbuf times;
-		times.actime = convert_timespec_to_time_t(ft->atime);
-		times.modtime = convert_timespec_to_time_t(ft->mtime);
-		result = utime(smb_fname->base_name, &times);
-	} else {
-		result = utime(smb_fname->base_name, NULL);
-	}
-	if (!((result == -1) && (errno == ENOSYS))) {
-		goto out;
-	}
-#endif
-	errno = ENOSYS;
-	result = -1;
 
- out:
-	END_PROFILE(syscall_ntimes);
+	if (!fsp->fsp_flags.is_pathref) {
+		result = futimens(fsp_get_io_fd(fsp), times);
+		goto out;
+	}
+
+	if (fsp->fsp_flags.have_proc_fds) {
+		int fd = fsp_get_pathref_fd(fsp);
+		const char *p = NULL;
+		char buf[PATH_MAX];
+
+		p = sys_proc_fd_path(fd, buf, sizeof(buf));
+		if (p != NULL) {
+			/*
+			 * The dirfd argument of utimensat is ignored when
+			 * pathname is an absolute path
+			 */
+			result = utimensat(AT_FDCWD, p, times, 0);
+		} else {
+			result = -1;
+		}
+
+		goto out;
+	}
+
+	/*
+	 * The fd is a pathref (opened with O_PATH) and there isn't fd to
+	 * path translation mechanism. Fallback to path based call.
+	 */
+	result = utimensat(AT_FDCWD, fsp->fsp_name->base_name, times, 0);
+
+out:
+	END_PROFILE(syscall_fntimes);
+
 	return result;
 }
+
 
 /*********************************************************************
  A version of ftruncate that will write the space on disk if strict
@@ -3812,7 +3811,7 @@ static struct vfs_fn_pointers vfs_default_fns = {
 	.lchown_fn = vfswrap_lchown,
 	.chdir_fn = vfswrap_chdir,
 	.getwd_fn = vfswrap_getwd,
-	.ntimes_fn = vfswrap_ntimes,
+	.fntimes_fn = vfswrap_fntimes,
 	.ftruncate_fn = vfswrap_ftruncate,
 	.fallocate_fn = vfswrap_fallocate,
 	.lock_fn = vfswrap_lock,

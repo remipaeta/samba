@@ -24,7 +24,8 @@
 #include "includes.h"
 #include "system/filesys.h"
 #include "lib/util/server_id.h"
-#include "popt_common.h"
+#include "lib/util/close_low_fd.h"
+#include "lib/cmdline/cmdline.h"
 #include "locking/share_mode_lock.h"
 #include "smbd/smbd.h"
 #include "smbd/globals.h"
@@ -1554,7 +1555,6 @@ extern void build_options(bool screen);
 		OPT_INTERACTIVE,
 		OPT_FORK,
 		OPT_NO_PROCESS_GROUP,
-		OPT_LOG_STDOUT
 	};
 	struct poptOption long_options[] = {
 		POPT_AUTOHELP
@@ -1591,14 +1591,6 @@ extern void build_options(bool screen);
 			.descrip    = "Don't create a new process group" ,
 		},
 		{
-			.longName   = "log-stdout",
-			.shortName  = 'S',
-			.argInfo    = POPT_ARG_NONE,
-			.arg        = NULL,
-			.val        = OPT_LOG_STDOUT,
-			.descrip    = "Log to stdout" ,
-		},
-		{
 			.longName   = "build-options",
 			.shortName  = 'b',
 			.argInfo    = POPT_ARG_NONE,
@@ -1623,6 +1615,7 @@ extern void build_options(bool screen);
 			.descrip    = "Set profiling level","PROFILE_LEVEL",
 		},
 		POPT_COMMON_SAMBA
+		POPT_COMMON_VERSION
 		POPT_TABLEEND
 	};
 	struct smbd_parent_context *parent = NULL;
@@ -1653,14 +1646,13 @@ extern void build_options(bool screen);
 		.exit_server = smbd_exit_server,
 		.exit_server_cleanly = smbd_exit_server_cleanly,
 	};
+	bool ok;
 
 	/*
 	 * Do this before any other talloc operation
 	 */
 	talloc_enable_null_tracking();
 	frame = talloc_stackframe();
-
-	setup_logging(argv[0], DEBUG_DEFAULT_STDOUT);
 
 	smb_init_locale();
 
@@ -1674,7 +1666,24 @@ extern void build_options(bool screen);
 	set_auth_parameters(argc,argv);
 #endif
 
-	pc = poptGetContext("smbd", argc, argv, long_options, 0);
+	ok = samba_cmdline_init(frame,
+				SAMBA_CMDLINE_CONFIG_SERVER,
+				true /* require_smbconf */);
+	if (!ok) {
+		DBG_ERR("Failed to setup cmdline parser!\n");
+		exit(ENOMEM);
+	}
+
+	pc = samba_popt_get_context(getprogname(),
+				    argc,
+				    argv,
+				    long_options,
+				    0);
+	if (pc == NULL) {
+		DBG_ERR("Failed to get popt context!\n");
+		exit(ENOMEM);
+	}
+
 	while((opt = poptGetNextOpt(pc)) != -1) {
 		switch (opt)  {
 		case OPT_DAEMON:
@@ -1689,9 +1698,6 @@ extern void build_options(bool screen);
 		case OPT_NO_PROCESS_GROUP:
 			no_process_group = true;
 			break;
-		case OPT_LOG_STDOUT:
-			log_stdout = true;
-			break;
 		case 'b':
 			print_build_options = True;
 			break;
@@ -1704,14 +1710,14 @@ extern void build_options(bool screen);
 	}
 	poptFreeContext(pc);
 
+	log_stdout = (debug_get_log_type() == DEBUG_STDOUT);
+
 	if (interactive) {
 		Fork = False;
 		log_stdout = True;
 	}
 
-	if (log_stdout) {
-		setup_logging(argv[0], DEBUG_STDOUT);
-	} else {
+	if (!log_stdout) {
 		setup_logging(argv[0], DEBUG_FILE);
 	}
 
@@ -1749,7 +1755,6 @@ extern void build_options(bool screen);
 	gain_root_privilege();
 	gain_root_group_privilege();
 
-	fault_setup();
 	dump_core_setup("smbd", lp_logfile(talloc_tos(), lp_sub));
 
 	/* we are never interested in SIGPIPE */
@@ -1796,11 +1801,6 @@ extern void build_options(bool screen);
 
 	if (sizeof(uint16_t) < 2 || sizeof(uint32_t) < 4) {
 		DEBUG(0,("ERROR: Samba is not configured correctly for the word size on your machine\n"));
-		exit(1);
-	}
-
-	if (!lp_load_initial_only(get_dyn_CONFIGFILE())) {
-		DEBUG(0, ("error opening config file '%s'\n", get_dyn_CONFIGFILE()));
 		exit(1);
 	}
 
@@ -2131,11 +2131,11 @@ extern void build_options(bool screen);
 
 		if (serving_printers) {
 			bool bgq = lp_parm_bool(-1, "smbd", "backgroundqueue", true);
-			bool ok = printing_subsystem_init(ev_ctx,
-							  msg_ctx,
-							  dce_ctx,
-							  true,
-							  bgq);
+			ok = printing_subsystem_init(ev_ctx,
+						     msg_ctx,
+						     dce_ctx,
+						     true,
+						     bgq);
 			if (!ok) {
 				exit_daemon("Samba failed to init printing subsystem", EACCES);
 			}
@@ -2148,18 +2148,18 @@ extern void build_options(bool screen);
 		}
 #endif
 	} else if (serving_printers) {
-		bool ok = printing_subsystem_init(ev_ctx,
-						  msg_ctx,
-						  dce_ctx,
-						  false,
-						  false);
+		ok = printing_subsystem_init(ev_ctx,
+					     msg_ctx,
+					     dce_ctx,
+					     false,
+					     false);
 		if (!ok) {
 			exit(1);
 		}
 	}
 
 	if (!is_daemon) {
-		int sock;
+		int ret, sock;
 
 		/* inetd mode */
 		TALLOC_FREE(frame);
@@ -2170,7 +2170,19 @@ extern void build_options(bool screen);
 		sock = dup(0);
 
 		/* close stdin, stdout (if not logging to it), but not stderr */
-		close_low_fds(true, !debug_get_output_is_stdout(), false);
+		ret = close_low_fd(0);
+		if (ret != 0) {
+			DBG_ERR("close_low_fd(0) failed: %s\n", strerror(ret));
+			return 1;
+		}
+		if (!debug_get_output_is_stdout()) {
+			ret = close_low_fd(1);
+			if (ret != 0) {
+				DBG_ERR("close_low_fd(1) failed: %s\n",
+					strerror(ret));
+				return 1;
+			}
+		}
 
 #ifdef HAVE_ATEXIT
 		atexit(killkids);

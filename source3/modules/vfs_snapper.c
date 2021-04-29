@@ -2222,22 +2222,26 @@ static int snapper_gmt_chdir(vfs_handle_struct *handle,
 	return ret;
 }
 
-static int snapper_gmt_ntimes(vfs_handle_struct *handle,
-			      const struct smb_filename *smb_fname,
-			      struct smb_file_time *ft)
+static int snapper_gmt_fntimes(vfs_handle_struct *handle,
+			       files_struct *fsp,
+			       struct smb_file_time *ft)
 {
 	time_t timestamp = 0;
 
-	if (!snapper_gmt_strip_snapshot(talloc_tos(), handle,
-					smb_fname,
-					&timestamp, NULL)) {
+	if (!snapper_gmt_strip_snapshot(talloc_tos(),
+					handle,
+					fsp->fsp_name,
+					&timestamp,
+					NULL)) {
 		return -1;
 	}
+
 	if (timestamp != 0) {
 		errno = EROFS;
 		return -1;
 	}
-	return SMB_VFS_NEXT_NTIMES(handle, smb_fname, ft);
+
+	return SMB_VFS_NEXT_FNTIMES(handle, fsp, ft);
 }
 
 static int snapper_gmt_readlinkat(vfs_handle_struct *handle,
@@ -2731,7 +2735,7 @@ static struct vfs_fn_pointers snapper_fns = {
 	.unlinkat_fn = snapper_gmt_unlinkat,
 	.fchmod_fn = snapper_gmt_fchmod,
 	.chdir_fn = snapper_gmt_chdir,
-	.ntimes_fn = snapper_gmt_ntimes,
+	.fntimes_fn = snapper_gmt_fntimes,
 	.readlinkat_fn = snapper_gmt_readlinkat,
 	.mknodat_fn = snapper_gmt_mknodat,
 	.realpath_fn = snapper_gmt_realpath,

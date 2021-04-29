@@ -3872,9 +3872,9 @@ static NTSTATUS fruit_streaminfo(vfs_handle_struct *handle,
 	return NT_STATUS_OK;
 }
 
-static int fruit_ntimes(vfs_handle_struct *handle,
-			const struct smb_filename *smb_fname,
-			struct smb_file_time *ft)
+static int fruit_fntimes(vfs_handle_struct *handle,
+			 files_struct *fsp,
+			 struct smb_file_time *ft)
 {
 	int rc = 0;
 	struct adouble *ad = NULL;
@@ -3886,13 +3886,13 @@ static int fruit_ntimes(vfs_handle_struct *handle,
 	if ((config->meta != FRUIT_META_NETATALK) ||
 	    is_omit_timespec(&ft->create_time))
 	{
-		return SMB_VFS_NEXT_NTIMES(handle, smb_fname, ft);
+		return SMB_VFS_NEXT_FNTIMES(handle, fsp, ft);
 	}
 
-	DEBUG(10,("set btime for %s to %s\n", smb_fname_str_dbg(smb_fname),
-		 time_to_asc(convert_timespec_to_time_t(ft->create_time))));
+	DBG_DEBUG("set btime for %s to %s\n", fsp_str_dbg(fsp),
+		  time_to_asc(convert_timespec_to_time_t(ft->create_time)));
 
-	ad = ad_get(talloc_tos(), handle, smb_fname, ADOUBLE_META);
+	ad = ad_fget(talloc_tos(), handle, fsp, ADOUBLE_META);
 	if (ad == NULL) {
 		goto exit;
 	}
@@ -3900,16 +3900,16 @@ static int fruit_ntimes(vfs_handle_struct *handle,
 	ad_setdate(ad, AD_DATE_CREATE | AD_DATE_UNIX,
 		   convert_time_t_to_uint32_t(ft->create_time.tv_sec));
 
-	rc = ad_set(handle, ad, smb_fname);
+	rc = ad_fset(handle, ad, fsp);
 
 exit:
 
 	TALLOC_FREE(ad);
 	if (rc != 0) {
-		DEBUG(1, ("fruit_ntimes: %s\n", smb_fname_str_dbg(smb_fname)));
+		DBG_WARNING("%s\n", fsp_str_dbg(fsp));
 		return -1;
 	}
-	return SMB_VFS_NEXT_NTIMES(handle, smb_fname, ft);
+	return SMB_VFS_NEXT_FNTIMES(handle, fsp, ft);
 }
 
 static int fruit_fallocate(struct vfs_handle_struct *handle,
@@ -5209,7 +5209,7 @@ static struct vfs_fn_pointers vfs_fruit_fns = {
 	.lstat_fn = fruit_lstat,
 	.fstat_fn = fruit_fstat,
 	.streaminfo_fn = fruit_streaminfo,
-	.ntimes_fn = fruit_ntimes,
+	.fntimes_fn = fruit_fntimes,
 	.ftruncate_fn = fruit_ftruncate,
 	.fallocate_fn = fruit_fallocate,
 	.create_file_fn = fruit_create_file,

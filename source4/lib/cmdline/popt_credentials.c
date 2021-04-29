@@ -121,7 +121,8 @@ static void popt_common_credentials_callback(poptContext con,
 			popt_get_cmdline_credentials(),
 						   use_kerberos 
 						   ? CRED_USE_KERBEROS_REQUIRED
-						   : CRED_USE_KERBEROS_DISABLED);
+						   : CRED_USE_KERBEROS_DISABLED,
+			CRED_SPECIFIED);
 		break;
 	}
 		
@@ -153,7 +154,8 @@ static void popt_common_credentials_callback(poptContext con,
 		gensec_features |= GENSEC_FEATURE_SIGN;
 		cli_credentials_set_gensec_features(
 					popt_get_cmdline_credentials(),
-						    gensec_features);
+						    gensec_features,
+						    CRED_SPECIFIED);
 		break;
 	}
 	case OPT_ENCRYPT:
@@ -166,7 +168,8 @@ static void popt_common_credentials_callback(poptContext con,
 		gensec_features |= GENSEC_FEATURE_SEAL;
 		cli_credentials_set_gensec_features(
 					popt_get_cmdline_credentials(),
-						    gensec_features);
+						    gensec_features,
+						    CRED_SPECIFIED);
 		break;
 	}
 	}

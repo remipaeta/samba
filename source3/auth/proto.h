@@ -36,17 +36,16 @@
 /* The following definitions come from auth/auth.c  */
 
 NTSTATUS smb_register_auth(int version, const char *name, auth_init_function init);
-bool load_auth_module(struct auth_context *auth_context,
-		      const char *module,
-		      struct auth_methods **ret) ;
 NTSTATUS make_auth3_context_for_ntlm(TALLOC_CTX *mem_ctx,
 				     struct auth_context **auth_context);
 NTSTATUS make_auth3_context_for_netlogon(TALLOC_CTX *mem_ctx,
 					 struct auth_context **auth_context);
 NTSTATUS make_auth3_context_for_winbind(TALLOC_CTX *mem_ctx,
 					struct auth_context **auth_context);
-bool auth3_context_set_challenge(struct auth_context *ctx, uint8_t chal[8],
-				 const char *challenge_set_by);
+bool auth3_context_set_challenge(
+	struct auth_context *ctx,
+	const uint8_t chal[8],
+	const char *challenge_set_by);
 
 /****************************************************************************
  Try to get a challenge out of the various authentication modules.
@@ -254,11 +253,6 @@ NTSTATUS auth3_user_info_dc_add_hints(struct auth_user_info_dc *user_info_dc,
 				      uid_t uid,
 				      gid_t gid,
 				      uint32_t flags);
-NTSTATUS auth3_session_info_create(TALLOC_CTX *mem_ctx,
-				   const struct auth_user_info_dc *user_info_dc,
-				   const char *original_user_name,
-				   uint32_t session_info_flags,
-				   struct auth_session_info **session_info_out);
 NTSTATUS create_token_from_username(TALLOC_CTX *mem_ctx, const char *username,
 				    bool is_guest,
 				    uid_t *uid, gid_t *gid,

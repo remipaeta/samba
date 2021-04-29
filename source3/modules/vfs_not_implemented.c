@@ -396,9 +396,9 @@ struct smb_filename *vfs_not_implemented_getwd(vfs_handle_struct *handle,
 	return NULL;
 }
 
-int vfs_not_implemented_ntimes(vfs_handle_struct *handle,
-			       const struct smb_filename *smb_fname,
-			       struct smb_file_time *ft)
+int vfs_not_implemented_fntimes(vfs_handle_struct *handle,
+				files_struct *fsp,
+				struct smb_file_time *ft)
 {
 	errno = ENOSYS;
 	return -1;
@@ -1038,7 +1038,7 @@ static struct vfs_fn_pointers vfs_not_implemented_fns = {
 	.lchown_fn = vfs_not_implemented_lchown,
 	.chdir_fn = vfs_not_implemented_chdir,
 	.getwd_fn = vfs_not_implemented_getwd,
-	.ntimes_fn = vfs_not_implemented_ntimes,
+	.fntimes_fn = vfs_not_implemented_fntimes,
 	.ftruncate_fn = vfs_not_implemented_ftruncate,
 	.fallocate_fn = vfs_not_implemented_fallocate,
 	.lock_fn = vfs_not_implemented_lock,

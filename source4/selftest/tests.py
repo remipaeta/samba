@@ -17,7 +17,6 @@
 # by the name of the test, the environment it needs and the command to run, all
 # three separated by newlines. All other lines in the output are considered
 # comments.
-from __future__ import print_function
 
 import os
 import sys
@@ -470,6 +469,14 @@ plantestsuite_loadlist("samba.tests.dns_packet",
                         "samba.tests.dns_packet"
                        ])
 
+plantestsuite_loadlist("samba.tests.sddl",
+                       "none",
+                       [python,
+                        '-msamba.subunit.run',
+                        '$LOADLIST',
+                        "$LISTOPT"
+                        "samba.tests.sddl"
+                       ])
 
 for t in smbtorture4_testsuites("dns_internal."):
     plansmbtorture4testsuite(t, "ad_dc_default:local", '//$SERVER/whavever')
@@ -888,6 +895,9 @@ planoldpythontestsuite("ad_dc_smb1",
                        extra_args=['-U"$USERNAME%$PASSWORD"'])
 planoldpythontestsuite("ad_dc",
                        "samba.tests.net_join",
+                       extra_args=['-U"$USERNAME%$PASSWORD"'])
+planoldpythontestsuite("ad_dc",
+                       "samba.tests.s3_net_join",
                        extra_args=['-U"$USERNAME%$PASSWORD"'])
 planoldpythontestsuite("ad_dc",
                        "samba.tests.segfault",

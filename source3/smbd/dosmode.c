@@ -1203,21 +1203,22 @@ NTSTATUS file_set_sparse(connection_struct *conn,
  than POSIX.
 *******************************************************************/
 
-int file_ntimes(connection_struct *conn, const struct smb_filename *smb_fname,
+int file_ntimes(connection_struct *conn,
+		files_struct *fsp,
 		struct smb_file_time *ft)
 {
 	int ret = -1;
 
 	errno = 0;
 
-	DEBUG(6, ("file_ntime: actime: %s",
-		  time_to_asc(convert_timespec_to_time_t(ft->atime))));
-	DEBUG(6, ("file_ntime: modtime: %s",
-		  time_to_asc(convert_timespec_to_time_t(ft->mtime))));
-	DEBUG(6, ("file_ntime: ctime: %s",
-		  time_to_asc(convert_timespec_to_time_t(ft->ctime))));
-	DEBUG(6, ("file_ntime: createtime: %s",
-		  time_to_asc(convert_timespec_to_time_t(ft->create_time))));
+	DBG_INFO("actime: %s",
+		 time_to_asc(convert_timespec_to_time_t(ft->atime)));
+	DBG_INFO("modtime: %s",
+		 time_to_asc(convert_timespec_to_time_t(ft->mtime)));
+	DBG_INFO("ctime: %s",
+		 time_to_asc(convert_timespec_to_time_t(ft->ctime)));
+	DBG_INFO("createtime: %s",
+		 time_to_asc(convert_timespec_to_time_t(ft->create_time)));
 
 	/* Don't update the time on read-only shares */
 	/* We need this as set_filetime (which can be called on
@@ -1230,7 +1231,7 @@ int file_ntimes(connection_struct *conn, const struct smb_filename *smb_fname,
 		return 0;
 	}
 
-	if(SMB_VFS_NTIMES(conn, smb_fname, ft) == 0) {
+	if (SMB_VFS_FNTIMES(fsp, ft) == 0) {
 		return 0;
 	}
 
@@ -1250,12 +1251,12 @@ int file_ntimes(connection_struct *conn, const struct smb_filename *smb_fname,
 
 	/* Check if we have write access. */
 	if (can_write_to_file(conn,
-			conn->cwd_fsp,
-			smb_fname))
+			      conn->cwd_fsp,
+			      fsp->fsp_name))
 	{
 		/* We are allowed to become root and change the filetime. */
 		become_root();
-		ret = SMB_VFS_NTIMES(conn, smb_fname, ft);
+		ret = SMB_VFS_FNTIMES(fsp, ft);
 		unbecome_root();
 	}
 

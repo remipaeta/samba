@@ -27,7 +27,7 @@ sub return_alias_env
 sub have_ads($) {
         my ($self) = @_;
 	my $found_ads = 0;
-        my $smbd_build_options = Samba::bindir_path($self, "smbd") . " -b|";
+        my $smbd_build_options = Samba::bindir_path($self, "smbd") . " --configfile=/dev/null -b|";
         open(IN, $smbd_build_options) or die("Unable to run $smbd_build_options: $!");
 
         while (<IN>) {
@@ -735,10 +735,6 @@ sub provision_ad_member
 [valid_users_unix_group]
     path = $share_dir
     valid users = \"+$dcvars->{DOMAIN}/domain users\"
-
-[valid_users_nis_group]
-    path = $share_dir
-    valid users = \"&$dcvars->{DOMAIN}/domain users\"
 
 [valid_users_unix_nis_group]
     path = $share_dir
@@ -1847,11 +1843,11 @@ sub make_bin_cmd
 		@preargs = split(/ /, $valgrind);
 	}
 	my @args = ("-F", "--no-process-group",
-		    "-s", $env_vars->{SERVERCONFFILE},
+		    "--configfile=$env_vars->{SERVERCONFFILE}",
 		    "-l", $env_vars->{LOGDIR});
 
 	if (not defined($dont_log_stdout)) {
-		push(@args, "--log-stdout");
+		push(@args, "--debug-stdout");
 	}
 	return (@preargs, $binary, @args, @optargs);
 }
@@ -1899,11 +1895,9 @@ sub check_or_start($$) {
 
 	$binary = Samba::bindir_path($self, "winbindd");
 	@full_cmd = $self->make_bin_cmd($binary, $env_vars,
-					 $ENV{WINBINDD_OPTIONS}, $ENV{WINBINDD_VALGRIND}, "N/A");
-
-	if (not defined($ENV{WINBINDD_DONT_LOG_STDOUT})) {
-		push(@full_cmd, "--stdout");
-	}
+					 $ENV{WINBINDD_OPTIONS},
+					 $ENV{WINBINDD_VALGRIND},
+					 $ENV{WINBINDD_DONT_LOG_STDOUT});
 
 	# fork and exec() winbindd in the child process
 	$daemon_ctx = {
@@ -3062,7 +3056,7 @@ force_user:x:$gid_force_user:
 	$ret{SMBD_TEST_LOG_POS} = 0;
 	$ret{SERVERCONFFILE} = $conffile;
 	$ret{TESTENV_DIR} = $prefix_abs;
-	$ret{CONFIGURATION} ="-s $conffile";
+	$ret{CONFIGURATION} ="--configfile=$conffile";
 	$ret{LOCK_DIR} = $lockdir;
 	$ret{SERVER} = $server;
 	$ret{USERNAME} = $unix_name;

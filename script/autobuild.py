@@ -3,7 +3,6 @@
 # Copyright Andrew Tridgell 2010
 # released under GNU GPL v3 or later
 
-from __future__ import print_function
 from subprocess import call, check_call, check_output, Popen, PIPE, CalledProcessError
 import os
 import tarfile
@@ -114,6 +113,11 @@ if options.enable_coverage:
 else:
     LCOV_CMD = 'echo "lcov skipped since no --enable-coverage specified"'
 
+if options.enable_coverage:
+    PUBLISH_DOCS = "mkdir -p ${LOG_BASE}/public && mv output/htmldocs ${LOG_BASE}/public/htmldocs"
+else:
+    PUBLISH_DOCS = 'echo "HTML documentation publishing skipped since no --enable-coverage specified"'
+
 CLEAN_SOURCE_TREE_CMD = "cd ${TEST_SOURCE_DIR} && script/clean-source-tree.sh"
 
 if args:
@@ -211,6 +215,7 @@ tasks = {
             ("autoconf", "autoconf"),
             ("configure", "./configure"),
             ("make", "make html htmlman"),
+            ("publish-docs", PUBLISH_DOCS),
             ("clean", "make clean"),
         ],
     },
@@ -756,7 +761,7 @@ tasks = {
          "--without-ad-dc "
          "--bundled-libraries=!tdb"),
             ("samba-make", "make"),
-            ("samba-check", "./bin/smbd -b | grep CLUSTER_SUPPORT"),
+            ("samba-check", "./bin/smbd --configfile=/dev/null -b | grep CLUSTER_SUPPORT"),
             ("samba-install", "make install"),
             ("ctdb-check", "test -e ${PREFIX_DIR}/sbin/ctdbd"),
 

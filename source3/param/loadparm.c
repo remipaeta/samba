@@ -75,6 +75,7 @@
 #include "libcli/auth/ntlm_check.h"
 #include "lib/crypto/gnutls_helpers.h"
 #include "lib/util/string_wrappers.h"
+#include "auth/credentials/credentials.h"
 
 #ifdef HAVE_SYS_SYSCTL_H
 #include <sys/sysctl.h>
@@ -682,15 +683,6 @@ static void init_globals(struct loadparm_context *lp_ctx, bool reinit_globals)
 	Globals.machine_password_timeout = 60 * 60 * 24 * 7;	/* 7 days default. */
 	Globals.lm_announce = Auto;	/* = Auto: send only if LM clients found */
 	Globals.lm_interval = 60;
-#if (defined(HAVE_NETGROUP) && defined(WITH_AUTOMOUNT))
-	Globals.nis_homedir = false;
-#ifdef WITH_NISPLUS_HOME
-	lpcfg_string_set(Globals.ctx, &Globals.homedir_map,
-			 "auto_home.org_dir");
-#else
-	lpcfg_string_set(Globals.ctx, &Globals.homedir_map, "auto.home");
-#endif
-#endif
 	Globals.time_server = false;
 	Globals.bind_interfaces_only = false;
 	Globals.unix_password_sync = false;
@@ -964,6 +956,10 @@ static void init_globals(struct loadparm_context *lp_ctx, bool reinit_globals)
 	Globals.async_dns_timeout = 10;
 
 	Globals.client_smb_encrypt = SMB_ENCRYPTION_DEFAULT;
+
+	Globals._client_use_kerberos = CRED_USE_KERBEROS_DESIRED;
+
+	Globals.client_protection = CRED_CLIENT_PROTECTION_DEFAULT;
 
 	/* Now put back the settings that were set with lp_set_cmdline() */
 	apply_lp_set_cmdline();
@@ -4716,6 +4712,16 @@ int lp_client_ipc_signing(void)
 	}
 	return client_ipc_signing;
 }
+
+enum credentials_use_kerberos lp_client_use_kerberos(void)
+{
+	if (lp_weak_crypto() == SAMBA_WEAK_CRYPTO_DISALLOWED) {
+		return CRED_USE_KERBEROS_REQUIRED;
+	}
+
+	return lp__client_use_kerberos();
+}
+
 
 int lp_rpc_low_port(void)
 {

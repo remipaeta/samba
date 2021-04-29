@@ -272,7 +272,9 @@ void set_cmdline_auth_info_use_ccache(struct user_auth_info *auth_info, bool b)
 
 	gensec_features = cli_credentials_get_gensec_features(auth_info->creds);
 	gensec_features |= GENSEC_FEATURE_NTLM_CCACHE;
-	cli_credentials_set_gensec_features(auth_info->creds, gensec_features);
+	cli_credentials_set_gensec_features(auth_info->creds,
+					    gensec_features,
+					    CRED_SPECIFIED);
 }
 
 bool get_cmdline_auth_info_use_ccache(const struct user_auth_info *auth_info)
@@ -312,7 +314,9 @@ void set_cmdline_auth_info_use_kerberos(struct user_auth_info *auth_info,
 		krb5_state = CRED_USE_KERBEROS_DISABLED;
 	}
 
-	cli_credentials_set_kerberos_state(auth_info->creds, krb5_state);
+	cli_credentials_set_kerberos_state(auth_info->creds,
+					   krb5_state,
+					   CRED_SPECIFIED);
 }
 
 bool get_cmdline_auth_info_use_kerberos(const struct user_auth_info *auth_info)
@@ -351,7 +355,9 @@ void set_cmdline_auth_info_fallback_after_kerberos(struct user_auth_info *auth_i
 		break;
 	}
 
-	cli_credentials_set_kerberos_state(auth_info->creds, krb5_state);
+	cli_credentials_set_kerberos_state(auth_info->creds,
+					   krb5_state,
+					   CRED_SPECIFIED);
 }
 
 bool get_cmdline_auth_info_fallback_after_kerberos(const struct user_auth_info *auth_info)

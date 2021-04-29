@@ -17,7 +17,6 @@
 # by the name of the test, the environment it needs and the command to run, all
 # three separated by newlines. All other lines in the output are considered
 # comments.
-from __future__ import print_function
 
 import os
 import subprocess
@@ -109,7 +108,7 @@ def plantestsuite_loadlist(name, env, cmdline):
         raise AssertionError("loadlist test %s does not support not --list" % name)
     if "$LOADLIST" not in cmdline:
         raise AssertionError("loadlist test %s does not support --load-list" % name)
-    print(("%s | %s" % (cmdline.replace("$LOADLIST", ""), add_prefix(name, env, support_list))).replace("$LISTOPT", "--list"))
+    print(("%s | %s" % (cmdline.replace("$LOADLIST", ""), add_prefix(name, env, support_list))).replace("$LISTOPT", "--list "))
     print(cmdline.replace("$LISTOPT", "") + " 2>&1 " + " | " + add_prefix(name, env, False))
 
 

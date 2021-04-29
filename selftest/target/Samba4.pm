@@ -166,7 +166,7 @@ sub wait_for_start($$)
 		$cmd .= "$testenv_vars->{CONFIGURATION} ";
 		$cmd .= "-H ldap://$testenv_vars->{SERVER} ";
 		$cmd .= "-U$testenv_vars->{USERNAME}%$testenv_vars->{PASSWORD} ";
-		$cmd .= "-s base ";
+		$cmd .= "--scope base ";
 		$cmd .= "-b '$search_dn' ";
 		while (system("$cmd >/dev/null") != 0) {
 			$count++;
@@ -456,10 +456,10 @@ sub setup_namespaces
 	$namespaces .= $cmd_config;
 	unless (system($namespaces) == 0) {
 		warn("Failed to add namespaces \n$namespaces");
-		return;
+		return -1;
 	}
 
-	return;
+	return 0;
 }
 
 sub setup_trust($$$$$)
@@ -607,10 +607,10 @@ sub provision_raw_prepare($$$$$$$$$$$$$$)
 	$ctx->{nsswrap_hostname} = "$ctx->{hostname}.$ctx->{dnsname}";
 	if ($ENV{SAMBA_DNS_FAKING}) {
 		$ctx->{dns_host_file} = "$ENV{SELFTEST_PREFIX}/dns_host_file";
-		$ctx->{samba_dnsupdate} = "$ENV{SRCDIR_ABS}/source4/scripting/bin/samba_dnsupdate -s $ctx->{smb_conf} --all-interfaces --use-file=$ctx->{dns_host_file}";
+		$ctx->{samba_dnsupdate} = "$ENV{SRCDIR_ABS}/source4/scripting/bin/samba_dnsupdate --configfile=$ctx->{smb_conf} --all-interfaces --use-file=$ctx->{dns_host_file}";
 		$ctx->{samba_dnsupdate} = $python_cmd .  $ctx->{samba_dnsupdate};
 	} else {
-	        $ctx->{samba_dnsupdate} = "$ENV{SRCDIR_ABS}/source4/scripting/bin/samba_dnsupdate -s $ctx->{smb_conf} --all-interfaces";
+	        $ctx->{samba_dnsupdate} = "$ENV{SRCDIR_ABS}/source4/scripting/bin/samba_dnsupdate --configfile=$ctx->{smb_conf} --all-interfaces";
 		$ctx->{samba_dnsupdate} = $python_cmd .  $ctx->{samba_dnsupdate};
 		$ctx->{use_resolv_wrapper} = 1;
 	}
@@ -782,8 +782,8 @@ sub provision_raw_step1($$)
 	server min protocol = SMB2_02
 	mangled names = yes
 	dns update command = $ctx->{samba_dnsupdate}
-	spn update command = $ctx->{python} $ENV{SRCDIR_ABS}/source4/scripting/bin/samba_spnupdate -s $ctx->{smb_conf}
-	gpo update command = $ctx->{python} $ENV{SRCDIR_ABS}/source4/scripting/bin/samba-gpupdate -s $ctx->{smb_conf} --target=Computer
+	spn update command = $ctx->{python} $ENV{SRCDIR_ABS}/source4/scripting/bin/samba_spnupdate --configfile $ctx->{smb_conf}
+	gpo update command = $ctx->{python} $ENV{SRCDIR_ABS}/source4/scripting/bin/samba-gpupdate --configfile $ctx->{smb_conf} --target=Computer
 	samba kcc command = $ctx->{python} $ENV{SRCDIR_ABS}/source4/scripting/bin/samba_kcc
 	dreplsrv:periodic_startup_interval = 0
 	dsdb:schema update allowed = yes
@@ -1336,7 +1336,7 @@ server min protocol = LANMAN1
 
 	my $samba_tool =  Samba::bindir_path($self, "samba-tool");
 	my $cmd = $self->get_cmd_env_vars($ret);
-	$cmd .= "$samba_tool domain join $ret->{CONFIGURATION} $dcvars->{REALM} member";
+	$cmd .= "$samba_tool domain join $ret->{CONFIGURATION} $dcvars->{REALM} --experimental-s4-member member";
 	$cmd .= " -U$dcvars->{DC_USERNAME}\%$dcvars->{DC_PASSWORD}";
 	$cmd .= " --machinepass=machine$ret->{PASSWORD}";
 
@@ -1401,7 +1401,7 @@ sub provision_rpc_proxy($$$)
 
 	# The joind runs in the context of the rpc_proxy/member for now
 	my $cmd = $self->get_cmd_env_vars($ret);
-	$cmd .= "$samba_tool domain join $ret->{CONFIGURATION} $dcvars->{REALM} member";
+	$cmd .= "$samba_tool domain join $ret->{CONFIGURATION} $dcvars->{REALM} --experimental-s4-member member";
 	$cmd .= " -U$dcvars->{DC_USERNAME}\%$dcvars->{DC_PASSWORD}";
 	$cmd .= " --machinepass=machine$ret->{PASSWORD}";
 
@@ -1481,7 +1481,7 @@ sub provision_promoted_dc($$$)
 
 	my $samba_tool =  Samba::bindir_path($self, "samba-tool");
 	my $cmd = $self->get_cmd_env_vars($ret);
-	$cmd .= "$samba_tool domain join $ret->{CONFIGURATION} $dcvars->{REALM} MEMBER --realm=$dcvars->{REALM}";
+	$cmd .= "$samba_tool domain join $ret->{CONFIGURATION} $dcvars->{REALM} --experimental-s4-member MEMBER --realm=$dcvars->{REALM}";
 	$cmd .= " -U$dcvars->{DC_USERNAME}\%$dcvars->{DC_PASSWORD}";
 	$cmd .= " --machinepass=machine$ret->{PASSWORD}";
 
@@ -2410,7 +2410,9 @@ sub setup_fl2008r2dc
 		my $upn_array = ["$env->{REALM}.upn"];
 		my $spn_array = ["$env->{REALM}.spn"];
 
-		$self->setup_namespaces($env, $upn_array, $spn_array);
+		if ($self->setup_namespaces($env, $upn_array, $spn_array) != 0) {
+			return undef;
+		}
 
 		$env = $self->setup_trust($env, $dc_vars, "forest", "");
 	}
@@ -2595,7 +2597,9 @@ sub _setup_ad_dc
 	my $upn_array = ["$env->{REALM}.upn"];
 	my $spn_array = ["$env->{REALM}.spn"];
 
-	$self->setup_namespaces($env, $upn_array, $spn_array);
+	if ($self->setup_namespaces($env, $upn_array, $spn_array) != 0) {
+		return undef;
+	}
 
 	return $env;
 }
@@ -2653,7 +2657,9 @@ sub setup_ad_dc_no_nss
 	my $upn_array = ["$env->{REALM}.upn"];
 	my $spn_array = ["$env->{REALM}.spn"];
 
-	$self->setup_namespaces($env, $upn_array, $spn_array);
+	if ($self->setup_namespaces($env, $upn_array, $spn_array) != 0) {
+		return undef;
+	}
 
 	return $env;
 }
@@ -2685,7 +2691,9 @@ sub setup_ad_dc_no_ntlm
 	my $upn_array = ["$env->{REALM}.upn"];
 	my $spn_array = ["$env->{REALM}.spn"];
 
-	$self->setup_namespaces($env, $upn_array, $spn_array);
+	if ($self->setup_namespaces($env, $upn_array, $spn_array) != 0) {
+		return undef;
+	}
 
 	return $env;
 }
@@ -2717,7 +2725,9 @@ sub setup_ad_dc_fips
 	my $upn_array = ["$env->{REALM}.upn"];
 	my $spn_array = ["$env->{REALM}.spn"];
 
-	$self->setup_namespaces($env, $upn_array, $spn_array);
+	if ($self->setup_namespaces($env, $upn_array, $spn_array) != 0) {
+		return undef;
+	}
 
 	return $env;
 }
@@ -2762,7 +2772,9 @@ sub setup_preforkrestartdc
 	my $upn_array = ["$env->{REALM}.upn"];
 	my $spn_array = ["$env->{REALM}.spn"];
 
-	$self->setup_namespaces($env, $upn_array, $spn_array);
+	if ($self->setup_namespaces($env, $upn_array, $spn_array) != 0) {
+		return undef;
+	}
 
 	return $env;
 }
@@ -2801,7 +2813,9 @@ sub setup_proclimitdc
 	my $upn_array = ["$env->{REALM}.upn"];
 	my $spn_array = ["$env->{REALM}.spn"];
 
-	$self->setup_namespaces($env, $upn_array, $spn_array);
+	if ($self->setup_namespaces($env, $upn_array, $spn_array) != 0) {
+		return undef;
+	}
 
 	return $env;
 }
@@ -2832,7 +2846,9 @@ sub setup_schema_dc
 	my $upn_array = ["$env->{REALM}.upn"];
 	my $spn_array = ["$env->{REALM}.spn"];
 
-	$self->setup_namespaces($env, $upn_array, $spn_array);
+	if ($self->setup_namespaces($env, $upn_array, $spn_array) != 0) {
+		return undef;
+	}
 
 	return $env;
 }
@@ -2929,7 +2945,9 @@ sub setup_backupfromdc
 	my $upn_array = ["$env->{REALM}.upn"];
 	my $spn_array = ["$env->{REALM}.spn"];
 
-	$self->setup_namespaces($env, $upn_array, $spn_array);
+	if ($self->setup_namespaces($env, $upn_array, $spn_array) != 0) {
+		return undef;
+	}
 
 	# Set up a dangling forward link to an expunged object
 	#
@@ -3225,7 +3243,9 @@ sub setup_renamedc
 	my $upn_array = ["$env->{REALM}.upn"];
 	my $spn_array = ["$env->{REALM}.spn"];
 
-	$self->setup_namespaces($env, $upn_array, $spn_array);
+	if ($self->setup_namespaces($env, $upn_array, $spn_array) != 0) {
+		return undef;
+	}
 
 	return $env;
 }
@@ -3250,7 +3270,7 @@ sub setup_offlinebackupdc
 
 	# create an offline backup of the 'backupfromdc' target
 	my $backupdir = File::Temp->newdir();
-	my $cmd = "offline -s $dcvars->{SERVERCONFFILE}";
+	my $cmd = "offline --configfile $dcvars->{SERVERCONFFILE}";
 	my $backup_file = $self->create_backup($env, $dcvars,
 					       $backupdir, $cmd);
 
@@ -3344,7 +3364,9 @@ sub setup_labdc
 	my $upn_array = ["$env->{REALM}.upn"];
 	my $spn_array = ["$env->{REALM}.spn"];
 
-	$self->setup_namespaces($env, $upn_array, $spn_array);
+	if ($self->setup_namespaces($env, $upn_array, $spn_array) != 0) {
+		return undef;
+	}
 
 	return $env;
 }
@@ -3464,7 +3486,9 @@ sub setup_customdc
 	my $upn_array = ["$env->{REALM}.upn"];
 	my $spn_array = ["$env->{REALM}.spn"];
 
-	$self->setup_namespaces($env, $upn_array, $spn_array);
+	if ($self->setup_namespaces($env, $upn_array, $spn_array) != 0) {
+		return undef;
+	}
 
 	return $env;
 }
